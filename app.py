@@ -37,6 +37,11 @@ def startup():
     if WORKER_IN_WEB:
         import worker; worker.start_in_background(WEB_WORKERS)
 
+@app.on_event('shutdown')
+def shutdown():
+    if WORKER_IN_WEB:   # a job in progress is put back in line by the worker thread (JobAborted) or by the reaper
+        import worker; worker.stop_all()
+
 @app.get('/api/config')
 def config():
     return {'supabase_url': accounts.URL, 'publishable_key': accounts.PUB, 'google_enabled': accounts.GOOGLE_ENABLED,

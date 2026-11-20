@@ -18,6 +18,8 @@ _busy = threading.Lock()                             # engine/agent keep per-pro
 
 def log(*a): print('[worker]', *a, flush=True)
 
+class JobAborted(Exception): pass   # job was deleted/cancelled/taken over while we rendered it
+
 class Worker:
     def __init__(self, name=None):
         host = socket.gethostname()
@@ -57,7 +59,7 @@ class Worker:
         jid, vid, uid = job['id'], job.get('video_id'), job['user_id']
         log('job', jid, job.get('topic', '')[:60], f"{job.get('minutes')} min", job.get('langs'), 'try', job.get('attempts'))
         out = os.path.join('jobs', jid)
-        st = {'step': 'starting', 'progress': 0, 'sent': None}
+        st = {'step': 'starting', 'progress': 0, 'sent': None, 'abort': False}
         done = threading.Event()
 
         def push(force=False):
@@ -71,9 +73,15 @@ class Worker:
                 try:
                     force = time.time() - last > BEAT
                     push(force)
-                    if force: accounts.worker_beat(self.id, jid); last = time.time()
+                    if force:
+                        accounts.worker_beat(self.id, jid); last = time.time()
+                        cur = accounts.get_job(jid)
+                        if not cur or cur['status'] != 'running' or cur.get('worker_id') != self.id:
+                            st['abort'] = True; log('job no longer ours, stopping', jid)
                 except Exception as e: log('progress update failed', str(e)[:100])
-        def cb(msg, p): st['step'] = msg; st['progress'] = max(0, min(99, round(p * 100)))
+        def cb(msg, p):
+            if st['abort'] or STOP.is_set() and threading.current_thread() is not threading.main_thread(): raise JobAborted()
+            st['step'] = msg; st['progress'] = max(0, min(99, round(p * 100)))
 
         t = threading.Thread(target=beat, daemon=True); t.start()
         try:
@@ -89,7 +97,9 @@ class Worker:
             log('job done', jid)
         except BaseException as e:          # SystemExit on SIGTERM -> put the job back in line
             done.set(); t.join(2)
-            stopping = isinstance(e, (SystemExit, KeyboardInterrupt))
+            if isinstance(e, JobAborted) and st['abort']:
+                log('job aborted', jid); return
+            stopping = isinstance(e, (SystemExit, KeyboardInterrupt, JobAborted))
             if not stopping: traceback.print_exc()
             try:
                 if stopping:
@@ -99,9 +109,11 @@ class Worker:
                     accounts.job_update(jid, status='error', step='failed', error=str(e)[:500], finished_at=accounts._now())
                     if vid: accounts.update_video(vid, status='error')
             except Exception as e2: log('could not record job result', e2)
-            if stopping: raise
+            if stopping and not isinstance(e, JobAborted): raise
         finally:
             shutil.rmtree(out, ignore_errors=True)
+
+def stop_all(): STOP.set()
 
 def start_in_background(n=1):
     """Used by the web app (WORKER_IN_WEB=1). Returns the threads."""
