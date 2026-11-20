@@ -7,3 +7,12 @@ services:
     envVars:
       - key: PORT
         value: "7860"
+      # set these in the Render dashboard (never commit values)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GOOGLE_AUTH_ENABLED
+        sync: false

@@ -23,3 +23,10 @@ Link from wisorbit.com: add a button pointing to the Space URL.
 
 ## Deploy on Render (free)
 New > Web Service > this repo; Render reads render.yaml (Docker, free plan). Add GEMINI_API_KEY and HF_TOKEN as environment variables in the Render dashboard. Never commit keys.
+
+## Accounts (Phase 1, Supabase)
+- Login: Supabase Auth email magic link / OTP (supabase-js in `static/index.html`). "Continue with Google" appears only when env `GOOGLE_AUTH_ENABLED=1` (enable the Google provider in Supabase first).
+- Env vars: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server only, never commit), optional `GOOGLE_AUTH_ENABLED`.
+- Schema: `supabase/schema.sql` (profiles, videos with RLS, private `videos` bucket).
+- Limits: `PLANS` in `accounts.py` (free = 2 videos/day, 1 min max). Stored videos are deleted after 7 days.
+- API: `GET /api/config`, `GET /api/me`, `GET /api/videos`, `POST /api/generate` (Bearer token required), `GET /api/status/{id}`, `GET /api/file/{id}/{name}`.
