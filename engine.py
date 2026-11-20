@@ -171,6 +171,7 @@ def build(sb_path,lang,outdir,cb=None,target=None):
     cred=sorted(set(CREDITS))[:6]
     ctext=('सीखते रहिए' if lang=='hi' else 'Keep learning')+r'\N{\fs22}'+(r'\N'.join(['Photos: '+c for c in cred]) if cred else 'Visuals: AI generated')
     subs.append((t+0.2,t+outro_d-0.2,'Small',ctext)); t+=outro_d
+    cb(f'final edit ({lang})',0.97)
     # concat video and audio, then subtitles + gentle music bed
     lst=os.path.join(work,'v.txt'); open(lst,'w').write(''.join(f"file '{c}'\n" for c in clips))
     alst=os.path.join(work,'a.txt'); open(alst,'w').write(''.join(f"file '{a}'\n" for a in audios))

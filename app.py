@@ -12,7 +12,7 @@ app = FastAPI(title='WisOrbit AI Video Agent')
 WORKER_IN_WEB = os.environ.get('WORKER_IN_WEB', '1').lower() in ('1', 'true', 'yes')
 WEB_WORKERS = int(os.environ.get('WEB_WORKERS', '1'))
 # seconds of render time per minute of video per language, used until real job history exists
-DEFAULT_SEC_PER_MIN = float(os.environ.get('RENDER_SEC_PER_MIN', '420'))
+DEFAULT_SEC_PER_MIN = float(os.environ.get('RENDER_SEC_PER_MIN', '900'))
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 class Req(BaseModel):

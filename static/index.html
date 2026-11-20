@@ -118,16 +118,16 @@ $('verifyOtp').onclick=async()=>{const {error}=await sb.auth.verifyOtp({email:$(
 $('google').onclick=()=>sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/'}});
 $('logout').onclick=async()=>{await sb.auth.signOut();setSession(null)};
 let timer=null,curJob=null;
-const mins=n=>n<=1?'~1 मिनट / ~1 min':`~${n} मिनट / ~${n} min`;
+const hiMin=n=>`~${Math.max(1,n)} मिनट`,enMin=n=>`~${Math.max(1,n)} min`;
 function stopWatch(){if(timer)clearInterval(timer);timer=null;curJob=null;$('go').disabled=false;show('queue',false)}
 async function poll(){if(!curJob)return;let s;
  try{const {data}=await sb.auth.getSession();token=data.session&&data.session.access_token;s=await api('/api/job/'+curJob)}catch(e){$('step').textContent='⚠️ '+e.message;return}
  if(s.status==='queued'){show('queue',true);$('prog').style.display='none';$('qpos').textContent=s.position;
-  $('qwait').innerHTML=s.workers?`अनुमानित इंतज़ार / Estimated wait: <b>${s.wait_min<1?'बस शुरू होने वाला / starting soon':mins(s.wait_min)}</b><small>वीडियो लगभग ${mins(s.done_in_min)} में तैयार · ready in about ${s.done_in_min} min · यह पेज अपने आप अपडेट होता है / this page updates itself</small>`
+  $('qwait').innerHTML=s.workers?`अनुमानित इंतज़ार / Estimated wait: <b>${s.wait_min<1?'बस शुरू होने वाला / starting soon':hiMin(s.wait_min)+' / '+enMin(s.wait_min)}</b><small>वीडियो लगभग ${hiMin(s.done_in_min)} में तैयार / ready in about ${enMin(s.done_in_min)} · यह पेज अपने आप अपडेट होता है / this page updates itself</small>`
    :'⏳ वीडियो सर्वर शुरू हो रहा है… / Starting a video server…<small>यह पेज अपने आप अपडेट होता है / this page updates itself</small>';return}
  show('queue',false);$('prog').style.display='block';
  if(s.status==='running'){$('bar').style.width=(s.progress||0)+'%';
-  $('step').textContent=`${s.step||''} · लगभग ${mins(s.done_in_min)} बाकी / about ${s.done_in_min} min left`;
+  $('step').textContent=`${s.step||''} · लगभग ${hiMin(s.done_in_min)} बाकी / about ${enMin(s.done_in_min)} left`;
   const p=s.progress||0;['s1','s2','s3','s4'].forEach((k,i)=>$(k).innerHTML=p>=[1,5,25,99][i]?'<b>'+$(k).textContent+'</b>':$(k).textContent);return}
  if(s.status==='done'){$('bar').style.width='100%';$('step').textContent='✅ तैयार! (मेरी वीडियो में भी सेव) / Ready! (also saved in My Videos)';$('out').style.display='block';
   $('out').innerHTML=(s.files||[]).filter(f=>f.url).map(f=>`<video controls preload="metadata" src="${f.url}"></video><a class="dl" href="${f.url}" target="_blank" rel="noopener">⬇ Download ${f.lang==='hi'?'हिंदी':'English'}</a>`).join('')}
