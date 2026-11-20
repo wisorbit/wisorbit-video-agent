@@ -39,6 +39,9 @@ input.in{width:100%;border-radius:12px;border:1px solid var(--line);background:#
 .hist{margin-top:20px}.hist h2{font-size:18px;margin:0 0 10px}.vrow{background:#0e1338;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;font-size:14px}
 .vrow small{color:var(--mut);display:block;margin-top:2px}.vrow a{color:var(--gold);font-weight:600;margin-right:14px}
 .hidden{display:none!important}
+.queue{margin-top:20px;background:#0e1338;border:1px solid var(--gold);border-radius:14px;padding:16px;text-align:center}
+.qnum{font-size:20px;font-weight:700}.qnum b{color:var(--gold);font-size:34px;margin-left:6px}.qnum small{display:block;font-size:12px;color:var(--mut);font-weight:400}
+#qwait{margin-top:8px;font-size:14px;color:var(--txt)}#qwait small{display:block;color:var(--mut);font-size:12px;margin-top:4px}
 footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
 </style></head><body><div class="wrap">
 <div class="top"><header><div class="logo">W</div><h1>WisOrbit AI Video Agent<small>Wisdom in Orbit</small></h1></header>
@@ -68,6 +71,8 @@ footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
  <label>4. लंबाई / Length: <span class="len" id="lv">1 मिनट</span></label>
  <input type="range" id="len" min="0.5" max="10" step="0.5" value="1">
  <button class="go" id="go">✨ वीडियो बनाएँ / Generate</button>
+ <div class="queue hidden" id="queue"><div class="qnum">लाइन में आपका नंबर: <b id="qpos">–</b><small>Your place in line</small></div>
+  <div id="qwait"></div><button class="btn2" id="cancel" style="margin-top:10px">✖ रद्द करें / Cancel</button></div>
  <div class="prog" id="prog"><div class="bar"><i id="bar"></i></div>
   <div class="steps"><span id="s1">Research</span><span id="s2">Script</span><span id="s3">Voice + Scenes</span><span id="s4">Final</span></div>
   <div id="step">शुरू हो रहा है…</div></div>
@@ -88,12 +93,12 @@ const pick=id=>document.querySelector('#'+id+' .on').dataset.v;
 const api=async(path,opt={})=>{opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{},token?{Authorization:'Bearer '+token}:{});
  const r=await fetch(path,opt);let b={};try{b=await r.json()}catch(e){}
  if(!r.ok)throw new Error(b.detail||('Error '+r.status));return b};
-async function loadMe(){try{me=await api('/api/me');
+async function loadMe(){try{me=await api('/api/me');if(me.active_job&&me.active_job!==curJob)watch(me.active_job);
  $('usage').innerHTML=`आज / Today: <b>${me.used_today}/${me.daily_limit}</b> वीडियो · प्लान / plan: <b>${me.plan}</b>${me.credits?` · credits: <b>${me.credits}</b>`:''} · max <b>${me.max_minutes}</b> मिनट`;
  $('len').max=me.max_minutes;if(+$('len').value>me.max_minutes){$('len').value=me.max_minutes;}$('lv').textContent=$('len').value+' मिनट';}catch(e){$('usage').textContent='⚠️ '+e.message}}
 async function loadVideos(){try{const v=await api('/api/videos');show('hist',true);
  $('vlist').innerHTML=v.length?v.map(x=>{const d=new Date(x.created_at).toLocaleString('hi-IN',{dateStyle:'medium',timeStyle:'short'});
-  const st={done:'✅',running:'⏳ बन रहा है / rendering',queued:'⏳ कतार में / queued',error:'⚠️ असफल / failed',expired:'🗑 7 दिन बाद हटाई गई / expired'}[x.status]||x.status;
+  const st={done:'✅',running:'⏳ बन रहा है / rendering',queued:'⏳ लाइन में / in line',cancelled:'✖ रद्द / cancelled',error:'⚠️ असफल / failed',expired:'🗑 7 दिन बाद हटाई गई / expired'}[x.status]||x.status;
   const links=(x.files||[]).filter(f=>f.url).map(f=>`<a href="${f.url}" target="_blank" rel="noopener">⬇ ${f.lang==='hi'?'हिंदी':f.lang==='en'?'English':f.name}</a>`).join('');
   return `<div class="vrow"><b>${x.topic.replace(/</g,'&lt;')}</b><small>${d} · ${x.style} · ${Math.round((x.duration_sec||0)/6)/10} min · ${st}</small><div style="margin-top:6px">${links}</div></div>`}).join(''):'<p class="sub">अभी कोई वीडियो नहीं / No videos yet</p>'}catch(e){}}
 function setSession(s){token=s?s.access_token:null;show('loginCard',!s);show('appCard',!!s);show('who',!!s);
@@ -112,18 +117,31 @@ $('verifyOtp').onclick=async()=>{const {error}=await sb.auth.verifyOtp({email:$(
  if(error)$('lerr').textContent='⚠️ '+error.message};
 $('google').onclick=()=>sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/'}});
 $('logout').onclick=async()=>{await sb.auth.signOut();setSession(null)};
+let timer=null,curJob=null;
+const mins=n=>n<=1?'~1 मिनट / ~1 min':`~${n} मिनट / ~${n} min`;
+function stopWatch(){if(timer)clearInterval(timer);timer=null;curJob=null;$('go').disabled=false;show('queue',false)}
+async function poll(){if(!curJob)return;let s;
+ try{const {data}=await sb.auth.getSession();token=data.session&&data.session.access_token;s=await api('/api/job/'+curJob)}catch(e){$('step').textContent='⚠️ '+e.message;return}
+ if(s.status==='queued'){show('queue',true);$('prog').style.display='none';$('qpos').textContent=s.position;
+  $('qwait').innerHTML=s.workers?`अनुमानित इंतज़ार / Estimated wait: <b>${s.wait_min<1?'बस शुरू होने वाला / starting soon':mins(s.wait_min)}</b><small>वीडियो लगभग ${mins(s.done_in_min)} में तैयार · ready in about ${s.done_in_min} min · यह पेज अपने आप अपडेट होता है / this page updates itself</small>`
+   :'⏳ वीडियो सर्वर शुरू हो रहा है… / Starting a video server…<small>यह पेज अपने आप अपडेट होता है / this page updates itself</small>';return}
+ show('queue',false);$('prog').style.display='block';
+ if(s.status==='running'){$('bar').style.width=(s.progress||0)+'%';
+  $('step').textContent=`${s.step||''} · लगभग ${mins(s.done_in_min)} बाकी / about ${s.done_in_min} min left`;
+  const p=s.progress||0;['s1','s2','s3','s4'].forEach((k,i)=>$(k).innerHTML=p>=[1,5,25,99][i]?'<b>'+$(k).textContent+'</b>':$(k).textContent);return}
+ if(s.status==='done'){$('bar').style.width='100%';$('step').textContent='✅ तैयार! (मेरी वीडियो में भी सेव) / Ready! (also saved in My Videos)';$('out').style.display='block';
+  $('out').innerHTML=(s.files||[]).filter(f=>f.url).map(f=>`<video controls preload="metadata" src="${f.url}"></video><a class="dl" href="${f.url}" target="_blank" rel="noopener">⬇ Download ${f.lang==='hi'?'हिंदी':'English'}</a>`).join('')}
+ else if(s.status==='cancelled'){$('step').textContent='✖ रद्द किया गया / Cancelled'}
+ else{$('step').textContent='⚠️ वीडियो नहीं बन पाया, फिर कोशिश करें (यह आपकी सीमा में नहीं गिना गया) / Could not make the video — please try again (not counted in your limit).'}
+ stopWatch();loadMe();loadVideos()}
+function watch(id){if(timer)clearInterval(timer);curJob=id;$('go').disabled=true;$('out').style.display='none';$('out').innerHTML='';
+ $('bar').style.width='0';$('step').textContent='';poll();timer=setInterval(poll,5000)}
+$('cancel').onclick=async()=>{if(!curJob)return;try{await api('/api/job/'+curJob+'/cancel',{method:'POST'})}catch(e){$('qwait').textContent='⚠️ '+e.message}poll()};
 $('go').onclick=async()=>{
  const topic=$('topic').value.trim(); if(!topic){$('topic').focus();return}
  const {data}=await sb.auth.getSession();token=data.session&&data.session.access_token;
- $('go').disabled=true;$('out').style.display='none';$('out').innerHTML='';
+ $('go').disabled=true;
  let r;try{r=await api('/api/generate',{method:'POST',body:JSON.stringify({topic,minutes:+$('len').value,style:pick('style'),langs:pick('lang')})})}
  catch(e){$('go').disabled=false;$('prog').style.display='block';$('bar').style.width='0';$('step').textContent='⚠️ '+e.message;return}
- $('prog').style.display='block';loadMe();loadVideos();
- const t=setInterval(async()=>{let s;try{s=await fetch('/api/status/'+r.id).then(r=>r.json())}catch(e){return}
-  $('bar').style.width=(s.progress||0)+'%';$('step').textContent=s.step||'';
-  const p=s.progress||0;['s1','s2','s3','s4'].forEach((k,i)=>$(k).innerHTML=p>=[1,5,25,99][i]?'<b>'+$(k).textContent+'</b>':$(k).textContent);
-  if(s.status==='unknown'){clearInterval(t);$('go').disabled=false;$('step').textContent='⚠️ सर्वर रीस्टार्ट हुआ, फिर कोशिश करें / Server restarted, please try again.';loadMe();loadVideos()}
-  if(s.status==='done'){clearInterval(t);$('go').disabled=false;$('step').textContent='✅ तैयार! (मेरी वीडियो में भी सेव) / Ready! (also saved in My Videos)';$('out').style.display='block';
-   $('out').innerHTML=s.files.map(f=>`<video controls src="${f}"></video><a class="dl" href="${f}" download>⬇ Download ${f.endsWith('_hi.mp4')?'हिंदी':'English'}</a>`).join('');loadMe();loadVideos()}
-  if(s.status==='error'){clearInterval(t);$('go').disabled=false;$('step').textContent='⚠️ '+s.step;loadMe();loadVideos()}},3000)};
+ loadMe();loadVideos();watch(r.id)};
 </script></body></html>

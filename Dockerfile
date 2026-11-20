@@ -8,4 +8,5 @@ COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 COPY --chown=user . .
 EXPOSE 7860
-CMD ["sh","-c","uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# WORKER_ONLY=1 -> render worker only (Oracle VM etc.); otherwise the web app (+ in-process worker if WORKER_IN_WEB=1)
+CMD ["sh","-c","if [ \"$WORKER_ONLY\" = \"1\" ]; then exec python -u worker.py; else exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860}; fi"]

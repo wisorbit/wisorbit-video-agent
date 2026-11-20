@@ -97,6 +97,7 @@ create or replace function public.claim_job(p_worker text) returns setof public.
 language plpgsql set search_path = public as $$
 declare v_id uuid;
 begin
+  if current_user not in ('service_role', 'postgres', 'supabase_admin') then raise exception 'not allowed'; end if;
   select id into v_id from public.jobs
    where status = 'queued'
    order by priority desc, created_at
@@ -117,6 +118,7 @@ create or replace function public.reap_stale_jobs(p_timeout_sec int default 300)
 language plpgsql set search_path = public as $$
 declare n int;
 begin
+  if current_user not in ('service_role', 'postgres', 'supabase_admin') then raise exception 'not allowed'; end if;
   with r as (
     update public.jobs
        set status = case when attempts >= 2 then 'error' else 'queued' end,
@@ -126,15 +128,19 @@ begin
            finished_at = case when attempts >= 2 then now() else null end
      where status = 'running' and heartbeat_at < now() - make_interval(secs => p_timeout_sec)
     returning video_id, status
+  ), v as (
+    update public.videos vv set status = r.status from r where vv.id = r.video_id returning 1
   )
-  update public.videos v set status = r.status from r where v.id = r.video_id;
-  get diagnostics n = row_count;
+  select count(*) into n from r;
   return n;
 end $$;
 
 -- Queue position + numbers for the wait estimate.
 create or replace function public.job_queue_info(p_job uuid) returns json
-language sql stable set search_path = public as $$
+language plpgsql stable set search_path = public as $$
+declare res json;
+begin
+  if current_user not in ('service_role', 'postgres', 'supabase_admin') then raise exception 'not allowed'; end if;
   with me as (select * from public.jobs where id = p_job),
   ahead as (
     select j.* from public.jobs j, me
@@ -157,9 +163,11 @@ language sql stable set search_path = public as $$
     'running', (select count(*) from running),
     'workers', (select count(*) from public.workers where last_seen > now() - interval '3 minutes'),
     'sec_per_min', (select percentile_cont(0.5) within group (order by spm) from recent)
-  );
-$$;
+  ) into res;
+  return res;
+end $$;
 
+-- (functions also refuse anyone but the server key, even if Supabase default privileges grant EXECUTE)
 -- ============ Table/function grants ============
 -- New Supabase projects no longer grant table access to the API roles automatically.
 grant usage on schema public to anon, authenticated, service_role;

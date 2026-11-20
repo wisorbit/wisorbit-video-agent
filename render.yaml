@@ -16,3 +16,6 @@ services:
         sync: false
       - key: GOOGLE_AUTH_ENABLED
         sync: false
+      # 1 = this web service also renders (one at a time). Set 0 once Oracle workers run.
+      - key: WORKER_IN_WEB
+        value: "1"
