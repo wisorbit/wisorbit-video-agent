@@ -1,7 +1,7 @@
 """WisOrbit AI Video Agent - web app. Run: uvicorn app:app --host 0.0.0.0 --port 7860"""
 import os,uuid,threading,traceback,time,shutil
 from fastapi import FastAPI,Header,HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import agent,accounts
@@ -45,6 +45,11 @@ def worker(jid,r,user,vid):
         except Exception: pass
     finally:
         accounts.cleanup(); clean_local()
+
+@app.exception_handler(Exception)
+def oops(req,exc):
+    traceback.print_exc()
+    return JSONResponse({'detail':'सर्वर में दिक्कत, थोड़ी देर बाद कोशिश करें / Server error, please try again shortly.'},status_code=500)
 
 @app.on_event('startup')
 def startup():

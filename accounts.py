@@ -51,7 +51,7 @@ def profile(user):
 
 def _today_start():
     now = dt.datetime.now(IST)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc).isoformat()
+    return now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 def used_today(uid):
     rows = _rest('GET', f'videos?user_id=eq.{uid}&created_at=gte.{_today_start()}&status=neq.error&select=id')
@@ -116,7 +116,7 @@ def cleanup():
     """Delete stored files older than KEEP_DAYS and mark rows expired; mark stale running jobs as error."""
     if not configured(): return
     try:
-        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=KEEP_DAYS)).isoformat()
+        cut = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=KEEP_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
         old = _rest('GET', f'videos?created_at=lt.{cut}&storage_path=not.is.null&select=id,storage_path') or []
         for v in old:
             paths = [x for x in v['storage_path'].split(',') if x]
