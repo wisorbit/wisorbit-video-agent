@@ -1,0 +1,71 @@
+<!doctype html><html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WisOrbit AI Video Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1030;--card:#141a45;--line:#2a3170;--gold:#ffd166;--vio:#7b5cff;--txt:#eef0ff;--mut:#a9afd6}
+*{box-sizing:border-box}body{margin:0;font-family:Poppins,'Noto Sans Devanagari',sans-serif;color:var(--txt);
+background:radial-gradient(900px 500px at 85% -10%,#3a1c71 0,transparent 60%),radial-gradient(700px 400px at -10% 110%,#12306b 0,transparent 60%),var(--bg);min-height:100vh}
+.wrap{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:22px}.logo{width:44px;height:44px;border-radius:50%;
+background:conic-gradient(var(--gold),var(--vio),var(--gold));display:grid;place-items:center;font-weight:700;color:var(--bg)}
+h1{font-size:22px;margin:0}h1 small{display:block;font-size:13px;color:var(--mut);font-weight:400}
+.hero{font-size:28px;font-weight:700;line-height:1.25;margin:10px 0 6px}.hero span{color:var(--gold)}
+.sub{color:var(--mut);margin:0 0 22px}
+.card{background:rgba(20,26,69,.85);border:1px solid var(--line);border-radius:18px;padding:20px;backdrop-filter:blur(6px)}
+label{display:block;font-size:14px;font-weight:600;margin:14px 0 8px}
+textarea{width:100%;min-height:84px;border-radius:12px;border:1px solid var(--line);background:#0e1338;color:var(--txt);padding:12px;font:inherit;font-size:16px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid var(--line);background:#0e1338;color:var(--txt);padding:9px 14px;border-radius:999px;cursor:pointer;font:inherit;font-size:14px}
+.chip.on{background:var(--vio);border-color:var(--vio)}
+input[type=range]{width:100%;accent-color:var(--gold)}.len{color:var(--gold);font-weight:700}
+button.go{margin-top:22px;width:100%;padding:16px;border:0;border-radius:14px;font:inherit;font-size:18px;font-weight:700;color:var(--bg);
+background:linear-gradient(90deg,var(--gold),#ffb347);cursor:pointer;box-shadow:0 10px 30px rgba(255,209,102,.25)}
+button.go:disabled{opacity:.5}
+.prog{display:none;margin-top:20px}.bar{height:12px;background:#0e1338;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--vio),var(--gold));transition:width .6s}
+.steps{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:8px}.steps b{color:var(--gold)}
+#step{margin-top:10px;font-size:14px}
+.out{display:none;margin-top:20px}video{width:100%;border-radius:14px;margin-top:10px;background:#000}
+a.dl{display:inline-block;margin-top:8px;color:var(--gold);font-weight:600}
+.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px}.feat div{background:#0e1338;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;color:var(--mut)}
+.feat b{display:block;color:var(--txt);font-size:14px;margin-bottom:2px}
+footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
+</style></head><body><div class="wrap">
+<header><div class="logo">W</div><h1>WisOrbit AI Video Agent<small>Wisdom in Orbit</small></h1></header>
+<div class="hero">विषय लिखिए, <span>पूरा वीडियो</span> एजेंट बनाएगा</div>
+<p class="sub">Research → Script → Voice → Scenes → Final edit. Hindi &amp; English.</p>
+<div class="card">
+ <label>1. वीडियो का विषय / Topic</label>
+ <textarea id="topic" placeholder="जैसे: चंद्रयान-3 चाँद पर कैसे उतरा / Photosynthesis for class 7"></textarea>
+ <label>2. स्टाइल / Style</label>
+ <div class="chips" id="style">
+  <button class="chip on" data-v="educational">📘 Educational</button><button class="chip" data-v="cinematic">🎬 Cinematic</button>
+  <button class="chip" data-v="realistic">📷 Realistic</button><button class="chip" data-v="youtube">▶️ YouTube</button></div>
+ <label>3. भाषा / Language</label>
+ <div class="chips" id="lang"><button class="chip on" data-v="hi,en">हिंदी + English</button><button class="chip" data-v="hi">हिंदी</button><button class="chip" data-v="en">English</button></div>
+ <label>4. लंबाई / Length: <span class="len" id="lv">1 मिनट</span></label>
+ <input type="range" id="len" min="0.5" max="10" step="0.5" value="1">
+ <button class="go" id="go">✨ वीडियो बनाएँ / Generate</button>
+ <div class="prog" id="prog"><div class="bar"><i id="bar"></i></div>
+  <div class="steps"><span id="s1">Research</span><span id="s2">Script</span><span id="s3">Voice + Scenes</span><span id="s4">Final</span></div>
+  <div id="step">शुरू हो रहा है…</div></div>
+ <div class="out" id="out"></div>
+</div>
+<div class="feat"><div><b>🔊 Synced voice</b>हर सीन आवाज़ की लंबाई पर कटा</div><div><b>📷 Real photos first</b>असली चीज़ों की असली तस्वीरें</div>
+<div><b>🆓 Free providers</b>एक ख़त्म तो अगला अपने आप</div><div><b>🚫 No watermark</b>साफ़ वीडियो, सबटाइटल के साथ</div></div>
+<footer>© WisOrbit · wisorbit.com</footer></div>
+<script>
+const $=id=>document.getElementById(id);
+document.querySelectorAll('.chips').forEach(g=>g.addEventListener('click',e=>{if(!e.target.classList.contains('chip'))return;g.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));e.target.classList.add('on')}));
+$('len').oninput=()=>$('lv').textContent=$('len').value+' मिनट';
+const pick=id=>document.querySelector('#'+id+' .on').dataset.v;
+$('go').onclick=async()=>{
+ const topic=$('topic').value.trim(); if(!topic){$('topic').focus();return}
+ $('go').disabled=true;$('prog').style.display='block';$('out').style.display='none';$('out').innerHTML='';
+ const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,minutes:+$('len').value,style:pick('style'),langs:pick('lang')})}).then(r=>r.json());
+ const t=setInterval(async()=>{const s=await fetch('/api/status/'+r.id).then(r=>r.json());
+  $('bar').style.width=(s.progress||0)+'%';$('step').textContent=s.step||'';
+  const p=s.progress||0;['s1','s2','s3','s4'].forEach((k,i)=>$(k).innerHTML=p>=[1,5,25,99][i]?'<b>'+$(k).textContent+'</b>':$(k).textContent);
+  if(s.status==='done'){clearInterval(t);$('go').disabled=false;$('step').textContent='✅ तैयार!';$('out').style.display='block';
+   $('out').innerHTML=s.files.map(f=>`<video controls src="${f}"></video><a class="dl" href="${f}" download>⬇ Download ${f.endsWith('_hi.mp4')?'हिंदी':'English'}</a>`).join('')}
+  if(s.status==='error'){clearInterval(t);$('go').disabled=false;$('step').textContent='⚠️ '+s.step}},3000)};
+</script></body></html>
