@@ -4,6 +4,10 @@ Pipeline: storyboard -> per-scene voice (TTS chain) -> measure duration -> visua
 import re,json,os,subprocess,sys,time,urllib.parse,requests,random
 sys.path.insert(0,os.path.dirname(__file__))
 W,H,FPS=1280,720,25
+def set_resolution(h=720):
+    """720 (free) or 1080 (paid plans). Subtitles keep a 1280x720 layout and are scaled by libass."""
+    global W,H
+    W,H=(1920,1080) if int(h or 720)>=1080 else (1280,720)
 WIKI_UA={'User-Agent':'WisOrbitVideoAgent/0.4 (https://video.wisorbit.com; contact via https://wisorbit.com)'}   # Wikimedia rate-limits generic agents (429)
 VOICES={'hi':['hi-IN-MadhurNeural','hi-IN-SwaraNeural'],'en':['en-IN-PrabhatNeural','en-IN-NeerjaNeural']}
 log=lambda *a: print('[engine]',*a,flush=True)
@@ -118,8 +122,8 @@ def write_ass(lines,path,lang):
     font='Noto Sans Devanagari' if lang=='hi' else 'Noto Sans'
     hdr=f"""[Script Info]
 ScriptType: v4.00+
-PlayResX: {W}
-PlayResY: {H}
+PlayResX: 1280
+PlayResY: 720
 WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding

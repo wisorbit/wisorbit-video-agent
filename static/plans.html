@@ -1,0 +1,148 @@
+<!doctype html><html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>प्लान और कीमतें / Plans & Pricing — WisOrbit AI Video Agent</title>
+<meta name="description" content="WisOrbit AI Video Agent plans: Free, Starter, Pro, Creator, minute pack and yearly pass. Prepaid, no auto-renewal.">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/pages.css">
+</head><body class="l-hi"><div class="wrap">
+<div class="top"><a class="brand" href="/"><div class="logo">W</div><b>WisOrbit AI Video Agent<small>Wisdom in Orbit</small></b></a>
+ <button class="langbtn" id="langbtn">English</button></div>
+
+<h1><span class="hi">प्लान और कीमतें</span><span class="en">Plans &amp; pricing</span></h1>
+<p class="sub"><span class="hi">प्रीपेड पास — एक बार भुगतान, अपने आप रिन्यू नहीं होता। सभी कीमतें भारतीय रुपये (₹ INR) में।</span>
+<span class="en">Prepaid passes — pay once, no auto-renewal. All prices in Indian Rupees (₹ INR).</span></p>
+
+<div class="me" id="me"></div>
+<div class="msg" id="msg"></div>
+<div class="msg info show" id="loading"><span class="hi">प्लान लोड हो रहे हैं…</span><span class="en">Loading plans…</span></div>
+<div class="grid" id="grid"></div>
+
+<div class="note">
+ <p class="hi">• मिनट = बनी हुई वीडियो की लंबाई × भाषाएँ (हिंदी + English = 2 गुना; Creator प्लान में एक ही बार गिना जाता है)।<br>
+ • वीडियो न बन पाए या रद्द हो जाए तो मिनट अपने आप वापस मिल जाते हैं।<br>
+ • पास खत्म होने पर आप अपने आप मुफ़्त प्लान पर आ जाते हैं — कोई अपने-आप कटौती नहीं।<br>
+ • भुगतान Razorpay से सुरक्षित (UPI, कार्ड, नेटबैंकिंग)। हम आपके कार्ड/UPI की जानकारी सेव नहीं करते।<br>
+ • पढ़ें: <a href="/refund">रिफ़ंड व कैंसलेशन</a> · <a href="/terms">नियम व शर्तें</a> · <a href="/shipping">डिलीवरी</a></p>
+ <p class="en">• Minutes = length of the finished video × languages (Hindi + English counts twice; counted once on the Creator plan).<br>
+ • If a video fails or is cancelled, its minutes are returned automatically.<br>
+ • When a pass ends you simply move back to the Free plan — nothing is charged automatically.<br>
+ • Payments are processed securely by Razorpay (UPI, cards, netbanking). We never store your card/UPI details.<br>
+ • Read: <a href="/refund">Refund &amp; Cancellation</a> · <a href="/terms">Terms</a> · <a href="/shipping">Shipping &amp; Delivery</a></p>
+</div>
+<footer class="foot" id="foot"></footer>
+</div>
+<script src="/lang.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const both=(hi,en)=>`<span class="hi">${hi}</span><span class="en">${en}</span>`;
+const STYLE={educational:'📘 Educational',cinematic:'🎬 Cinematic',realistic:'📷 Realistic',youtube:'▶️ YouTube'};
+let sb=null,token=null,me=null,DATA=null,busy=false;
+
+function rupees(p){const r=(p||0)/100;return '₹'+r.toLocaleString('en-IN',{maximumFractionDigits:r%1?2:0})}
+function n(x){return (+x).toLocaleString('en-IN',{maximumFractionDigits:1})}
+function fmtDate(ts){if(!ts)return '';try{return new Date(ts).toLocaleDateString(WOLang.get()==='hi'?'hi-IN':'en-IN',{day:'numeric',month:'short',year:'numeric'})}catch(e){return ts}}
+function show(kind,html,quiet){const m=$('msg');m.className='msg show '+kind;m.innerHTML=html;if(!quiet)m.scrollIntoView({behavior:'smooth',block:'center'})}
+
+function period(p){
+  if(p.kind==='free')return both('हमेशा मुफ़्त','free forever');
+  if(p.kind==='pack'||!p.period_days)return both('एक बार','one-time');
+  if(p.period_days===30)return both('/ 30 दिन','/ 30 days');
+  if(p.period_days===365)return both('/ साल (365 दिन)','/ year (365 days)');
+  return both(`/ ${p.period_days} दिन`,`/ ${p.period_days} days`);
+}
+function features(p){
+  const f=[];
+  if(p.kind==='free'){
+    if(p.daily_videos!=null)f.push(both(`रोज़ ${p.daily_videos} वीडियो`,`${p.daily_videos} videos a day`));
+  }else if(p.kind==='pack'||!p.period_days){
+    f.push(both(`${n(p.minutes_quota)} मिनट (प्लान की तारीख़ नहीं बदलती)`,`${n(p.minutes_quota)} minutes (plan dates unchanged)`));
+  }else if(p.period_days>30){
+    f.push(both(`हर 30 दिन ${n(p.minutes_quota)} मिनट`,`${n(p.minutes_quota)} minutes every 30 days`));
+  }else{
+    f.push(both(`${p.period_days} दिन में ${n(p.minutes_quota)} मिनट`,`${n(p.minutes_quota)} minutes in ${p.period_days} days`));
+  }
+  f.push(both(`हर वीडियो ${n(p.max_video_minutes)} मिनट तक`,`Videos up to ${n(p.max_video_minutes)} min each`));
+  f.push(`${p.resolution>=1080?'1080p Full HD':'720p HD'}`);
+  f.push(p.styles&&p.styles.length?both('स्टाइल: ','Styles: ')+p.styles.map(s=>STYLE[s]||esc(s)).join(', '):both('सभी 4 स्टाइल','All 4 styles'));
+  if(p.both_langs_one_charge)f.push(both('हिंदी + English एक ही चार्ज में','Hindi + English for one charge'));
+  if(p.priority>=20)f.push(both('लाइन में सबसे पहले','Top priority in the queue'));
+  else if(p.priority>=10)f.push(both('लाइन में जल्दी नंबर','Priority in the queue'));
+  f.push(both('कोई वॉटरमार्क नहीं','No watermark'));
+  return f;
+}
+
+function render(){
+  if(!DATA)return;
+  const on=DATA.payments_enabled;
+  $('grid').innerHTML=DATA.plans.map(p=>{
+    const cur=me&&me.plan===p.id&&p.kind!=='pack';
+    let btn;
+    if(p.kind==='free')btn=`<a class="buy ghost" href="/">${both('मुफ़्त शुरू करें','Start free')}</a>`;
+    else if(!on||!(p.price_paise>0))btn=`<button class="buy off" disabled>${both('जल्द आ रहा है','Coming soon')}</button>`;
+    else btn=`<button class="buy" data-plan="${esc(p.id)}">${cur?both('और जोड़ें / बढ़ाएँ','Extend / add more'):both('खरीदें','Buy')} · ${rupees(p.price_paise)}</button>`;
+    const tag=cur?`<span class="tag ok">${both('आपका प्लान','Your plan')}</span>`:(p.id==='pro'?`<span class="tag">${both('लोकप्रिय','Popular')}</span>`:'');
+    return `<div class="plan${p.id==='pro'?' best':''}${cur?' cur':''}">
+      <h3>${both(esc(p.name_hi),esc(p.name_en))}${tag}</h3>
+      <div class="price">${rupees(p.price_paise)} <small>${period(p)}</small></div>
+      <p class="desc">${both(esc(p.desc_hi||''),esc(p.desc_en||''))}</p>
+      <ul>${features(p).map(x=>`<li>${x}</li>`).join('')}</ul>${btn}</div>`}).join('');
+  $('grid').querySelectorAll('button[data-plan]').forEach(b=>b.onclick=()=>buy(b.dataset.plan,b));
+  if(!on)show('info',both('💡 ऑनलाइन पेमेंट जल्द आ रहा है। तब तक मुफ़्त प्लान इस्तेमाल करें।','💡 Online payments are coming soon. Meanwhile, enjoy the Free plan.'),true);
+}
+function renderMe(){
+  if(!me){$('me').innerHTML='';return}
+  const paid=me.plan!=='free';
+  let h=`${both('आपका प्लान','Your plan')}: <b>${both(esc(me.plan_name_hi||me.plan),esc(me.plan_name_en||me.plan))}</b>`;
+  if(paid)h+=` · ${both('बचे मिनट','minutes left')}: <b>${n(me.minutes_left)}</b> · ${both('तक','valid till')}: <b>${fmtDate(me.plan_expires_at)}</b>`;
+  if(me.bonus_minutes>0)h+=` · ${both('पैक मिनट','pack minutes')}: <b>${n(me.bonus_minutes)}</b>`;
+  $('me').innerHTML=h;
+}
+document.addEventListener('langchange',()=>renderMe());
+
+async function api(path,opt={}){
+  opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{},token?{Authorization:'Bearer '+token}:{});
+  const r=await fetch(path,opt);let b={};try{b=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(b.detail||('Error '+r.status));return b}
+async function freshToken(){if(!sb)return null;const {data}=await sb.auth.getSession();token=data.session?data.session.access_token:null;return token}
+async function loadMe(){if(!token){me=null;renderMe();return}try{me=await api('/api/me')}catch(e){me=null}renderMe();render()}
+
+function loadCheckout(){return new Promise((ok,bad)=>{if(window.Razorpay)return ok();
+  const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=ok;s.onerror=()=>bad(new Error('Razorpay load failed'));document.head.appendChild(s)})}
+
+async function buy(planId,btn){
+  if(busy)return;
+  await freshToken();
+  if(!token){show('info',both('खरीदने के लिए पहले लॉगिन करें। <a href="/">लॉगिन करें →</a> फिर इसी पेज पर वापस आएँ।','Please log in first to buy. <a href="/">Log in →</a> then come back to this page.'));return}
+  busy=true;btn.disabled=true;
+  try{
+    await loadCheckout();
+    const o=await api('/api/pay/order',{method:'POST',body:JSON.stringify({plan:planId})});
+    const rzp=new Razorpay({key:o.key_id,amount:o.amount,currency:o.currency,name:o.name,description:o.description,order_id:o.order_id,
+      prefill:{email:o.email||''},theme:{color:'#7b5cff'},
+      handler:async resp=>{
+        show('info',both('⏳ पेमेंट की जाँच हो रही है…','⏳ Verifying your payment…'));
+        try{await freshToken();const d=await api('/api/pay/verify',{method:'POST',body:JSON.stringify(resp)});
+          me=d;renderMe();render();
+          const paid=d.plan!=='free';
+          show('ok',both(`✅ पेमेंट सफल! आपका प्लान <b>${esc(d.plan_name_hi)}</b> चालू है${paid?` · ${n(d.minutes_left)} मिनट · ${fmtDate(d.plan_expires_at)} तक`:''}${d.bonus_minutes>0?` · पैक मिनट ${n(d.bonus_minutes)}`:''}। <a href="/">वीडियो बनाएँ →</a>`,
+                         `✅ Payment successful! Your <b>${esc(d.plan_name_en)}</b> plan is active${paid?` · ${n(d.minutes_left)} min · valid till ${fmtDate(d.plan_expires_at)}`:''}${d.bonus_minutes>0?` · pack minutes ${n(d.bonus_minutes)}`:''}. <a href="/">Create a video →</a>`));
+        }catch(e){show('err',both('⚠️ पेमेंट मिला पर जाँच में दिक्कत: ','⚠️ Payment received but verification had a problem: ')+esc(e.message)+'<br>'+
+          both('चिंता न करें — कुछ मिनट में प्लान अपने आप चालू हो जाएगा। न हो तो pkdnalanda@gmail.com पर लिखें।','Don\'t worry — the plan activates automatically within a few minutes. If not, email pkdnalanda@gmail.com.'))}
+        finally{busy=false;btn.disabled=false}},
+      modal:{ondismiss:()=>{busy=false;btn.disabled=false;show('info',both('पेमेंट रद्द किया गया — कोई पैसा नहीं कटा।','Payment cancelled — no money was taken.'))}}});
+    rzp.on('payment.failed',r=>{busy=false;btn.disabled=false;
+      show('err',both('❌ पेमेंट असफल: ','❌ Payment failed: ')+esc((r.error&&r.error.description)||'')+' '+both('फिर से कोशिश करें। पैसा कटा हो तो 5–7 दिन में अपने आप वापस आ जाता है।','Please try again. If money was debited, it is returned automatically in 5–7 days.'))});
+    rzp.open();
+  }catch(e){busy=false;btn.disabled=false;show('err','⚠️ '+esc(e.message))}
+}
+
+(async()=>{
+  try{DATA=await fetch('/api/plans').then(r=>{if(!r.ok)throw new Error('Error '+r.status);return r.json()});
+    $('loading').classList.remove('show');render()}
+  catch(e){$('loading').className='msg err show';$('loading').innerHTML=both('⚠️ प्लान लोड नहीं हो पाए, पेज रीफ़्रेश करें।','⚠️ Could not load plans, please refresh.')}
+  try{const cfg=await fetch('/api/config').then(r=>r.json());
+    if(cfg.supabase_url&&window.supabase){sb=window.supabase.createClient(cfg.supabase_url,cfg.publishable_key,{auth:{persistSession:true,autoRefreshToken:true}});
+      await freshToken();loadMe()}}catch(e){}
+})();
+</script></body></html>

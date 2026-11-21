@@ -1,12 +1,13 @@
 """WisOrbit AI Video Agent - web app. Run: uvicorn app:app --host 0.0.0.0 --port 7860
 Jobs go into the Supabase queue (table public.jobs); workers (worker.py) render them.
 WORKER_IN_WEB=1 (default) also runs one worker inside this web process; set 0 when Oracle/other workers run."""
-import os, re, math, threading, traceback
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+import os, re, math, json, threading, traceback
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import accounts
+import accounts, billing
 
 app = FastAPI(title='WisOrbit AI Video Agent')
 WORKER_IN_WEB = os.environ.get('WORKER_IN_WEB', '1').lower() in ('1', 'true', 'yes')
@@ -70,12 +71,18 @@ def gen(r: Req, authorization: str | None = Header(None)):
     r.minutes = round(min(max(r.minutes, 0.5), 10) * 2) / 2
     if r.langs not in ('hi,en', 'hi', 'en'): r.langs = 'hi,en'
     if r.style not in ('educational', 'cinematic', 'realistic', 'youtube'): r.style = 'educational'
-    ok, msg, p = accounts.check_quota(user, r.minutes)
+    ok, msg, p, ctx = accounts.check_quota(user, r.minutes, r.style, r.langs)
     if not ok: raise HTTPException(429, msg)
-    try: job = accounts.enqueue(user, p, r.topic, r.minutes, r.style, r.langs)
-    except ValueError as e: raise HTTPException(429, str(e))
-    if msg == 'credit': accounts.spend_credit(p)
-    return {'id': job['id'], 'video_id': job['video_id']}
+    spent = (0, 0)
+    if ctx['cost'] > 0:
+        spent = accounts.spend(user['id'], ctx['cost'])
+        if not spent: raise HTTPException(429, 'मिनट कम हैं / Not enough minutes.' + accounts.UPGRADE)
+    try: job = accounts.enqueue(user, p, r.topic, r.minutes, r.style, r.langs, ctx, spent)
+    except BaseException as e:
+        if ctx['cost'] > 0: accounts.give_back(user['id'], *spent)
+        if isinstance(e, ValueError): raise HTTPException(429, str(e))
+        raise
+    return {'id': job['id'], 'video_id': job['video_id'], 'cost_minutes': ctx['cost']}
 
 def _work(job): return float(job.get('minutes') or 1) * (2 if ',' in (job.get('langs') or '') else 1)
 
@@ -111,5 +118,86 @@ def job_cancel(jid: str, authorization: str | None = Header(None)):
     if not accounts.cancel_job(jid, user['id']):
         raise HTTPException(409, 'अब रद्द नहीं हो सकता (बनना शुरू हो गया) / Cannot cancel now — rendering has started.')
     return {'ok': True}
+
+# ---------------- plans + Razorpay payments (Phase 3) ----------------
+@app.get('/api/plans')
+def plans_list():
+    P = accounts.plans() if accounts.server_configured() else billing.index(billing.DEFAULT_PLANS)
+    rows = sorted((p for p in P.values() if p['active']), key=lambda p: (p['sort'], p['id']))
+    on = accounts.server_configured() and accounts.payments_enabled()
+    return {'plans': [billing.public(p) for p in rows], 'payments_enabled': on, 'key_id': billing.KEY_ID if on else ''}
+
+class BuyReq(BaseModel):
+    plan: str
+
+COMING_SOON = 'पेमेंट जल्द आ रहा है / Payments coming soon.'
+
+@app.post('/api/pay/order')
+def pay_order(b: BuyReq, authorization: str | None = Header(None)):
+    user = auth(authorization)
+    if not accounts.payments_enabled(): raise HTTPException(503, COMING_SOON)
+    plan = accounts.plans().get(b.plan)
+    if not plan or not plan['active'] or plan['kind'] == 'free' or plan['price_paise'] <= 0:
+        raise HTTPException(400, 'यह प्लान उपलब्ध नहीं / This plan is not available.')
+    order = accounts.order_new(user, plan)            # amount comes from the DB, never from the browser
+    try:
+        rz = billing.create_order(plan['price_paise'], order['id'], {'user_id': user['id'], 'plan': plan['id'], 'order': order['id']})
+    except Exception as e:
+        accounts.order_set(order['id'], status='failed', error=str(e)[:300])
+        raise HTTPException(502, 'पेमेंट शुरू नहीं हो पाया, थोड़ी देर बाद कोशिश करें / Could not start the payment, please try again shortly.')
+    accounts.order_set(order['id'], razorpay_order_id=rz['id'])
+    return {'key_id': billing.KEY_ID, 'order_id': rz['id'], 'amount': plan['price_paise'], 'currency': 'INR',
+            'name': 'WisOrbit AI Video Agent', 'description': f"{plan['name_en']} / {plan['name_hi']}",
+            'email': user.get('email') or ''}
+
+class VerifyReq(BaseModel):
+    razorpay_order_id: str; razorpay_payment_id: str; razorpay_signature: str
+
+@app.post('/api/pay/verify')
+def pay_verify(v: VerifyReq, authorization: str | None = Header(None)):
+    user = auth(authorization)
+    if not accounts.payments_enabled(): raise HTTPException(503, COMING_SOON)
+    if not billing.verify_payment(v.razorpay_order_id, v.razorpay_payment_id, v.razorpay_signature):
+        raise HTTPException(400, 'पेमेंट की जाँच नहीं हो पाई / Payment could not be verified.')
+    order = accounts.order_by_rzp(v.razorpay_order_id)
+    if not order or order['user_id'] != user['id']: raise HTTPException(404, 'order not found')
+    res = accounts.activate(order, v.razorpay_payment_id, 'verify')
+    if res not in ('ok', 'already'):
+        print('activation problem', order['id'], res, flush=True)
+        raise HTTPException(500, 'पेमेंट मिला, प्लान चालू करने में दिक्कत — हम जल्द ठीक करेंगे / Payment received; activating the plan failed — we will fix it shortly.')
+    out = accounts.usage(user); out['result'] = res; return out
+
+def handle_webhook(body: bytes, signature: str):
+    """Returns (http_status, json). Duplicate deliveries are safe: activation happens once."""
+    if not billing.WEBHOOK_SECRET: return 503, {'ok': False, 'detail': 'webhook secret not set'}
+    if not billing.verify_webhook(body, signature): return 400, {'ok': False, 'detail': 'bad signature'}
+    if not accounts.db_ready(): return 503, {'ok': False, 'detail': 'plans tables not set up yet'}   # Razorpay retries
+    try: ev = json.loads(body)
+    except Exception: return 400, {'ok': False, 'detail': 'bad json'}
+    info = billing.parse_webhook(ev)
+    if not info: return 200, {'ok': True, 'ignored': ev.get('event')}
+    order = accounts.order_by_rzp(info['order_id'])
+    if not order: return 200, {'ok': True, 'ignored': 'unknown order'}
+    if info['amount'] != int(order['amount_paise']) or info['currency'] != 'INR':
+        accounts.order_set(order['id'], error=f"amount mismatch {info['amount']} {info['currency']}")
+        return 200, {'ok': True, 'ignored': 'amount mismatch'}
+    res = accounts.activate(order, info['payment_id'], 'webhook')
+    if res not in ('ok', 'already'): return 500, {'ok': False, 'result': res}   # Razorpay retries later
+    return 200, {'ok': True, 'result': res}
+
+@app.post('/api/razorpay/webhook')
+async def razorpay_webhook(request: Request):
+    body = await request.body()
+    code, out = await run_in_threadpool(handle_webhook, body, request.headers.get('x-razorpay-signature', ''))
+    return JSONResponse(out, status_code=code)
+
+# simple pages (Razorpay website requirements) without the .html in the address
+PAGES = {'plans': 'plans.html', 'terms': 'terms.html', 'privacy': 'privacy.html', 'refund': 'refund.html',
+         'shipping': 'shipping.html', 'contact': 'contact.html'}
+
+def _page_route(fname):
+    return lambda: FileResponse(os.path.join('static', fname), media_type='text/html')
+for _slug, _file in PAGES.items():
+    app.add_api_route(f'/{_slug}', _page_route(_file), methods=['GET'], include_in_schema=False)
 
 app.mount('/', StaticFiles(directory='static', html=True), name='static')

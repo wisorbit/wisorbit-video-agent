@@ -38,7 +38,7 @@ class Worker:
             while not STOP.is_set():
                 now = time.time(); job = None
                 try:
-                    if now - last_reap > 60: accounts.reap_stale(STALE); last_reap = now
+                    if now - last_reap > 60: accounts.reap_stale(STALE); accounts.refund_failed(); last_reap = now
                     if now - last_clean > 6 * 3600:
                         accounts.cleanup(); accounts.prune_workers(); last_clean = now
                     job = accounts.claim_job(self.id)
@@ -86,7 +86,8 @@ class Worker:
         t = threading.Thread(target=beat, daemon=True); t.start()
         try:
             if vid: accounts.update_video(vid, status='running')
-            files = agent.run_job(job['topic'], float(job['minutes']), job['style'], job['langs'], out=out, cb=cb)
+            files = agent.run_job(job['topic'], float(job['minutes']), job['style'], job['langs'], out=out, cb=cb,
+                                  resolution=int(job.get('resolution') or 720))
             st['step'] = 'saving to your account'; st['progress'] = 99
             paths = [accounts.upload(uid, vid or jid, f) for f in files]
             done.set(); t.join(2)
@@ -108,6 +109,7 @@ class Worker:
                 else:
                     accounts.job_update(jid, status='error', step='failed', error=str(e)[:500], finished_at=accounts._now())
                     if vid: accounts.update_video(vid, status='error')
+                    accounts.refund_job(job)          # minutes back for a failed video
             except Exception as e2: log('could not record job result', e2)
             if stopping and not isinstance(e, JobAborted): raise
         finally:

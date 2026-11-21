@@ -151,7 +151,8 @@ NOTES:\n{facts[:6000]}\nSCENES:\n{json.dumps(scenes,ensure_ascii=False)}"""
     except Exception as e: log('check skipped',e)
     return scenes
 
-def run_job(topic,minutes=1,style='educational',langs='hi,en',out=None,cb=lambda *x:None):
+def run_job(topic,minutes=1,style='educational',langs='hi,en',out=None,cb=lambda *x:None,resolution=720):
+    engine.set_resolution(resolution)
     slug=re.sub(r'\W+','_',topic)[:40]; out=out or f'projects/{slug}'; os.makedirs(out,exist_ok=True)
     sbp=os.path.join(out,'storyboard.json')
     cb('researching topic',0.02); facts=research(topic); open(os.path.join(out,'research.txt'),'w').write(facts)

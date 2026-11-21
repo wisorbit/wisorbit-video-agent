@@ -16,6 +16,13 @@ services:
         sync: false
       - key: GOOGLE_AUTH_ENABLED
         sync: false
+      # Razorpay (Phase 3). Not set = payments show "Coming soon".
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
       # 1 = this web service also renders (one at a time). Set 0 once Oracle workers run.
       - key: WORKER_IN_WEB
         value: "1"

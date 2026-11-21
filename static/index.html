@@ -43,6 +43,9 @@ input.in{width:100%;border-radius:12px;border:1px solid var(--line);background:#
 .qnum{font-size:20px;font-weight:700}.qnum b{color:var(--gold);font-size:34px;margin-left:6px}.qnum small{display:block;font-size:12px;color:var(--mut);font-weight:400}
 #qwait{margin-top:8px;font-size:14px;color:var(--txt)}#qwait small{display:block;color:var(--mut);font-size:12px;margin-top:4px}
 footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
+footer nav{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-bottom:8px}footer nav a{color:var(--txt);text-decoration:none}footer nav a:hover{color:var(--gold)}
+.chip.lock{opacity:.45;border-style:dashed}.usage a{color:var(--gold);font-weight:600}.plink{display:inline-block;margin-top:4px}
+.acct{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
 </style></head><body><div class="wrap">
 <div class="top"><header><div class="logo">W</div><h1>WisOrbit AI Video Agent<small>Wisdom in Orbit</small></h1></header>
 <div class="who hidden" id="who"><span id="wemail"></span><br><button class="btn2" id="logout">लॉगआउट / Logout</button></div></div>
@@ -50,7 +53,7 @@ footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
 <p class="sub">Research → Script → Voice → Scenes → Final edit. Hindi &amp; English.</p>
 <div class="card" id="loginCard">
  <label>लॉगिन करें / Log in to create videos</label>
- <p class="sub" style="margin:0 0 12px;font-size:13px">मुफ़्त: रोज़ 2 वीडियो, हर वीडियो 1 मिनट तक · Free: 2 videos/day, up to 1 min each</p>
+ <p class="sub" style="margin:0 0 12px;font-size:13px">मुफ़्त: रोज़ 2 वीडियो, हर वीडियो 1 मिनट तक · Free: 2 videos/day, up to 1 min each · <a href="/plans" style="color:var(--gold)">💎 प्लान देखें / See plans</a></p>
  <input class="in" type="email" id="email" placeholder="आपका ईमेल / your email" autocomplete="email">
  <button class="go" id="sendOtp" style="margin-top:12px">📧 लॉगिन लिंक भेजें / Email me a login link</button>
  <div id="otpBox" class="hidden"><p class="msg">ईमेल चेक करें — लिंक पर क्लिक करें, या ईमेल में कोड हो तो यहाँ डालें।<br>Check your email — click the link, or enter the code if the email has one.</p>
@@ -81,20 +84,40 @@ footer{text-align:center;color:var(--mut);font-size:12px;margin-top:26px}
 <div class="hist hidden" id="hist"><h2>🎞 मेरी वीडियो / My Videos</h2><p class="sub" style="font-size:12px;margin:0 0 10px">वीडियो 7 दिन तक सुरक्षित रहती हैं · Videos are kept for 7 days</p><div id="vlist"></div></div>
 <div class="feat"><div><b>🔊 Synced voice</b>हर सीन आवाज़ की लंबाई पर कटा</div><div><b>📷 Real photos first</b>असली चीज़ों की असली तस्वीरें</div>
 <div><b>🆓 Free providers</b>एक ख़त्म तो अगला अपने आप</div><div><b>🚫 No watermark</b>साफ़ वीडियो, सबटाइटल के साथ</div></div>
-<footer>© WisOrbit · wisorbit.com</footer></div>
+<footer><nav><a href="/plans">💎 प्लान / Plans</a><a href="/terms">नियम / Terms</a><a href="/privacy">प्राइवेसी / Privacy</a>
+<a href="/refund">रिफ़ंड / Refund</a><a href="/shipping">डिलीवरी / Shipping</a><a href="/contact">संपर्क / Contact</a></nav>
+© WisOrbit · Preetam Kumar Deepak · Gaya, Bihar, India · <a href="mailto:pkdnalanda@gmail.com" style="color:var(--gold)">pkdnalanda@gmail.com</a></footer></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const $=id=>document.getElementById(id);
 let sb=null,token=null,me=null;
 const show=(id,on)=>$(id).classList.toggle('hidden',!on);
-document.querySelectorAll('.chips').forEach(g=>g.addEventListener('click',e=>{if(!e.target.classList.contains('chip'))return;g.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));e.target.classList.add('on')}));
+document.querySelectorAll('.chips').forEach(g=>g.addEventListener('click',e=>{if(!e.target.classList.contains('chip'))return;
+ if(e.target.dataset.lock){$('prog').style.display='block';$('bar').style.width='0';$('step').innerHTML='🔒 यह स्टाइल आपके प्लान में नहीं है / This style is not in your plan. <a href="/plans" style="color:var(--gold)">प्लान देखें / See plans →</a>';return}g.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));e.target.classList.add('on')}));
 $('len').oninput=()=>$('lv').textContent=$('len').value+' मिनट';
 const pick=id=>document.querySelector('#'+id+' .on').dataset.v;
 const api=async(path,opt={})=>{opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{},token?{Authorization:'Bearer '+token}:{});
  const r=await fetch(path,opt);let b={};try{b=await r.json()}catch(e){}
  if(!r.ok)throw new Error(b.detail||('Error '+r.status));return b};
+const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const linkPlans=t=>esc(t).replace(/\/plans/g,'<a href="/plans" style="color:var(--gold)">/plans</a>');
+const fmtD=ts=>{try{return new Date(ts).toLocaleDateString('hi-IN',{day:'numeric',month:'short',year:'numeric'})}catch(e){return ts}};
+const nm=x=>(+x||0).toLocaleString('en-IN',{maximumFractionDigits:1});
+function lockStyles(){const allow=me&&me.styles;let firstOk=null;
+ document.querySelectorAll('#style .chip').forEach(c=>{const locked=!!(allow&&allow.length&&!allow.includes(c.dataset.v));
+  c.classList.toggle('lock',locked);c.dataset.lock=locked?'1':'';c.title=locked?'यह स्टाइल आपके प्लान में नहीं / Not in your plan — see /plans':'';
+  if(!locked&&!firstOk)firstOk=c;
+  if(!c.dataset.label)c.dataset.label=c.textContent;c.textContent=(locked?'🔒 ':'')+c.dataset.label});
+ const on=document.querySelector('#style .chip.on');
+ if(on&&on.dataset.lock&&firstOk){on.classList.remove('on');firstOk.classList.add('on')}}
 async function loadMe(){try{me=await api('/api/me');if(me.active_job&&me.active_job!==curJob)watch(me.active_job);
- $('usage').innerHTML=`आज / Today: <b>${me.used_today}/${me.daily_limit}</b> वीडियो · प्लान / plan: <b>${me.plan}</b>${me.credits?` · credits: <b>${me.credits}</b>`:''} · max <b>${me.max_minutes}</b> मिनट`;
+ const paid=me.plan!=='free';let h=`<div class="acct"><span>प्लान / Plan: <b>${esc(me.plan_name_hi||me.plan)} / ${esc(me.plan_name_en||me.plan)}</b></span>`;
+ if(paid)h+=`<span>बचे मिनट / Minutes left: <b>${nm(me.minutes_left)}</b></span><span>तक / Valid till: <b>${fmtD(me.plan_expires_at)}</b></span>`;
+ if(me.bonus_minutes>0)h+=`<span>पैक मिनट / Pack minutes: <b>${nm(me.bonus_minutes)}</b></span>`;
+ if(!paid||me.minutes_left<=0)h+=`<span>आज मुफ़्त / Free today: <b>${me.used_today}/${me.daily_limit}</b> वीडियो</span>`;
+ h+=`<span>अधिकतम / Max: <b>${nm(me.max_minutes)}</b> मिनट · <b>${me.resolution||720}p</b></span></div>`;
+ h+=`<a class="plink" href="/plans">💎 ${paid?'प्लान बढ़ाएँ / Extend or upgrade':'प्लान अपग्रेड करें / Upgrade plan'} →</a>`;
+ $('usage').innerHTML=h;lockStyles();
  $('len').max=me.max_minutes;if(+$('len').value>me.max_minutes){$('len').value=me.max_minutes;}$('lv').textContent=$('len').value+' मिनट';}catch(e){$('usage').textContent='⚠️ '+e.message}}
 async function loadVideos(){try{const v=await api('/api/videos');show('hist',true);
  $('vlist').innerHTML=v.length?v.map(x=>{const d=new Date(x.created_at).toLocaleString('hi-IN',{dateStyle:'medium',timeStyle:'short'});
@@ -132,7 +155,7 @@ async function poll(){if(!curJob)return;let s;
  if(s.status==='done'){$('bar').style.width='100%';$('step').textContent='✅ तैयार! (मेरी वीडियो में भी सेव) / Ready! (also saved in My Videos)';$('out').style.display='block';
   $('out').innerHTML=(s.files||[]).filter(f=>f.url).map(f=>`<video controls preload="metadata" src="${f.url}"></video><a class="dl" href="${f.url}" target="_blank" rel="noopener">⬇ Download ${f.lang==='hi'?'हिंदी':'English'}</a>`).join('')}
  else if(s.status==='cancelled'){$('step').textContent='✖ रद्द किया गया / Cancelled'}
- else{$('step').textContent='⚠️ वीडियो नहीं बन पाया, फिर कोशिश करें (यह आपकी सीमा में नहीं गिना गया) / Could not make the video — please try again (not counted in your limit).'}
+ else{$('step').textContent='⚠️ वीडियो नहीं बन पाया, फिर कोशिश करें (यह आपकी सीमा में नहीं गिना गया, मिनट वापस) / Could not make the video — please try again (not counted; minutes returned).'}
  stopWatch();loadMe();loadVideos()}
 function watch(id){if(timer)clearInterval(timer);curJob=id;$('go').disabled=true;$('out').style.display='none';$('out').innerHTML='';
  $('bar').style.width='0';$('step').textContent='';poll();timer=setInterval(poll,5000)}
@@ -142,6 +165,6 @@ $('go').onclick=async()=>{
  const {data}=await sb.auth.getSession();token=data.session&&data.session.access_token;
  $('go').disabled=true;
  let r;try{r=await api('/api/generate',{method:'POST',body:JSON.stringify({topic,minutes:+$('len').value,style:pick('style'),langs:pick('lang')})})}
- catch(e){$('go').disabled=false;$('prog').style.display='block';$('bar').style.width='0';$('step').textContent='⚠️ '+e.message;return}
+ catch(e){$('go').disabled=false;$('prog').style.display='block';$('bar').style.width='0';$('step').innerHTML='⚠️ '+linkPlans(e.message);return}
  loadMe();loadVideos();watch(r.id)};
 </script></body></html>

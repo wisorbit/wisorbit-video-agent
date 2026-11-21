@@ -28,14 +28,14 @@ New > Web Service > this repo; Render reads render.yaml (Docker, free plan). Add
 - Login: Supabase Auth email magic link / OTP (supabase-js in `static/index.html`). "Continue with Google" appears only when env `GOOGLE_AUTH_ENABLED=1` (enable the Google provider in Supabase first).
 - Env vars: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (server only, never commit), optional `GOOGLE_AUTH_ENABLED`.
 - Schema: `supabase/schema.sql` (profiles, videos with RLS, private `videos` bucket).
-- Limits: `PLANS` in `accounts.py` (free = 2 videos/day, 1 min max). Stored videos are deleted after 7 days.
+- Limits: Supabase table `plans` (Phase 3, below); built-in fallback `billing.DEFAULT_PLANS` (free = 2 videos/day, 1 min max). Stored videos are deleted after 7 days.
 - API: `GET /api/config`, `GET /api/me`, `GET /api/videos`, `POST /api/generate` (Bearer token required), `GET /api/status/{id}`, `GET /api/file/{id}/{name}`.
 
 ## Job queue + workers (Phase 2)
 - Every request becomes a row in Supabase table `jobs` (`supabase/schema.sql`). The website only accepts jobs; **workers** render them.
 - A worker atomically takes the next job with `claim_job()` (`FOR UPDATE SKIP LOCKED`, highest `priority` then oldest), sends a heartbeat every 30 s, and uploads the MP4s to Storage. If a worker dies, `reap_stale_jobs()` puts its job back in line (max 2 tries).
 - Users see "लाइन में आपका नंबर: N / Your place in line" and an estimated wait (from the median render speed of recent jobs and the number of live workers). Queued jobs can be cancelled.
-- Limits unchanged: free = 2 videos/day, 1 min, one active job per user (also enforced by a unique index). `jobs.plan` / `jobs.priority` are ready for paid plans (`PLANS[...]['priority']` in `accounts.py`).
+- Limits unchanged: free = 2 videos/day, 1 min, one active job per user (also enforced by a unique index). `jobs.plan` / `jobs.priority` come from the user's plan (table `plans`).
 - Run a worker on its own: `python worker.py`, or Docker with `-e WORKER_ONLY=1`. One worker renders one video at a time; run more containers for more parallel videos.
 - Render web service: `WORKER_IN_WEB=1` (default) keeps one in-process worker. Set `WORKER_IN_WEB=0` once the Oracle workers are running.
 - Status: `GET /api/health` → queued / running / live workers. API: `POST /api/generate`, `GET /api/job/{id}`, `POST /api/job/{id}/cancel`, `GET /api/me` (includes `active_job`).
@@ -55,3 +55,25 @@ New > Web Service > this repo; Render reads render.yaml (Docker, free plan). Add
 4. **जाँचिए:** https://video.wisorbit.com/api/health खोलें — `"workers"` बढ़ जाने चाहिए।
 5. **Render पर:** Render dashboard → wisorbit-video-agent → Environment → `WORKER_IN_WEB` = `0` → Save (वेबसाइट अब सिर्फ़ jobs लेगी, वीडियो Oracle बनाएगा)।
 6. **अपडेट:** नया कोड आने पर VM में फिर `sudo bash setup.sh` चलाइए। Logs: `sudo docker logs -f wisorbit-worker-1`।
+
+## प्लान और पेमेंट (Phase 3) — हिंदी
+सभी पेड प्लान **प्रीपेड पास** हैं (एक बार भुगतान, कोई auto-renewal नहीं)। कीमतें कोड में नहीं, Supabase टेबल `plans` में हैं।
+पेज: `/plans` (प्लान + Razorpay बटन), `/terms`, `/privacy`, `/refund`, `/shipping`, `/contact` (संपर्क: सिर्फ़ ईमेल pkdnalanda@gmail.com)।
+API: `GET /api/plans`, `POST /api/pay/order`, `POST /api/pay/verify`, `POST /api/razorpay/webhook`।
+
+### 1. SQL चलाएँ (एक बार)
+Supabase → SQL Editor → `supabase/migrations/phase3_plans_payments.sql` पूरी पेस्ट करें → Run। दोबारा चलाना सुरक्षित है।
+जब तक यह नहीं चलता: साइट डिफ़ॉल्ट प्लान दिखाती है, पेमेंट बटन पर "जल्द आ रहा है / Coming soon", और वीडियो बनना पहले जैसा चलता है।
+
+### 2. कीमत बदलना
+Supabase → Table Editor → `plans` → लाइन बदलें → Save। `price_paise` पैसे में है: **₹199 = 19900**, ₹499 = 49900, ₹1,299 = 129900, ₹49 = 4900, ₹4,990 = 499000।
+बदलाव **60 सेकंड के अंदर** साइट पर दिखता है। `id` कभी न बदलें। `active = false` से प्लान छुप जाता है।
+
+### 3. पेमेंट चालू करना (मालिक)
+1. Razorpay → **Test Mode** → API Keys → Test key बनाएँ।
+2. Render → Environment: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` (अपनी रैंडम लाइन) → Save।
+3. Razorpay → Webhooks → URL `https://video.wisorbit.com/api/razorpay/webhook`, वही secret, events **payment.captured** + **order.paid**।
+4. `/plans` पर टेस्ट खरीद: UPI `success@razorpay` (फेल टेस्ट: `failure@razorpay`)। प्लान, मिनट, expiry होमपेज पर दिखें।
+5. KYC/वेबसाइट रिव्यू के बाद **Live keys** से Render की तीनों वैल्यू बदलें और Live Mode में webhook दोबारा बनाएँ।
+
+कोई key कभी commit/print न करें। टेस्ट सिर्फ़ नकली keys से (`tests/`)।
